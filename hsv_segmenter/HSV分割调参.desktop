@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=HSV分割调参
+Comment=Open HSV segmentation tuning UI
+Exec=/home/ubuntu22/kwork/hsv_segmenter/run_hsv_segmenter.sh
+Path=/home/ubuntu22/kwork/hsv_segmenter
+Terminal=true
+StartupNotify=true
+Categories=Development;Utility;

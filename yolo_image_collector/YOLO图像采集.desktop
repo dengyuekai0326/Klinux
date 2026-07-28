@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=YOLO图像采集
+Comment=Collect camera images for YOLO training
+Exec=/home/ubuntu22/kwork/yolo_image_collector/run_yolo_image_collector.sh
+Path=/home/ubuntu22/kwork/yolo_image_collector
+Terminal=true
+StartupNotify=true
+Categories=Utility;

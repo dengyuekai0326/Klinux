@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=ROS2控制面板
+Comment=Open ROS2 command control panel
+Exec=gnome-terminal -- bash -lc 'cd /home/ubuntu22/kwork/ros2_panel && ./run_ros2_panel.sh; echo; read -n 1 -s -r -p "按任意键关闭..."'
+Path=/home/ubuntu22/kwork/ros2_panel
+Terminal=false
+StartupNotify=true
+Categories=Utility;

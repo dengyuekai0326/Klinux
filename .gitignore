@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.DS_Store
+
+hsv_segmenter/hsv_params.json
+ros2_panel/config.json
+yolo_image_collector/collector_config.json
+yolo_image_collector/last_session.json
+yolo_image_collector/dataset/
