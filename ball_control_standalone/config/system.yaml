@@ -58,7 +58,8 @@ serial:
   tx_rate_hz: 30.0
   prediction_horizon_sec: 0.08
   send_ball_state: true
-  send_task_state: true
+  # 当前下位机只接收AA小球状态帧，不发送额外AB任务状态帧。
+  send_task_state: false
   task_state_keepalive_sec: 0.50
   log_tx: false
   log_rx: true

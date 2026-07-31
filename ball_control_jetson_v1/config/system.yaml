@@ -1,0 +1,105 @@
+# ================================================================
+# 比赛现场集中参数（类似 ROS launch 参数）
+# 只修改本文件，不需要修改 Python 代码。
+# 修改后重启程序生效；长度单位为 cm，时间单位为 sec。
+# ================================================================
+
+# ---------- 1. 摄像头 ----------
+camera:
+  # 推荐按名称自动寻找，重新插拔后 video 编号变化也无需修改：
+  device: "auto:MF500 camera"
+  # 若自动寻找失败，改成实际设备号，例如：device: /dev/video2
+  # YOLO的16:9有效输入就是640x360，直接采集该尺寸可省去二次缩放。
+  width: 640
+  height: 360
+  fps: 30
+  fourcc: MJPG
+  # MF500在当前UVC驱动下设为1会隔帧，只能约8FPS；2可恢复设备满速。
+  buffer_size: 2
+  reconnect_delay_sec: 0.5
+  maximum_frame_age_sec: 0.08
+
+# ---------- 2. 串口 ----------
+serial:
+  enabled: true
+  port: /dev/ttyACM0
+  baudrate: 115200
+  timeout_sec: 0.01
+  # 小球状态固定以30Hz发送；不要随摄像头帧率修改。
+  tx_rate_hz: 30.0
+  prediction_horizon_sec: 0.08
+  send_ball_state: true
+  # 当前下位机只接收AA小球状态帧，不发送额外AB任务状态帧。
+  send_task_state: false
+  task_state_keepalive_sec: 0.50
+  # 现场调试串口时可临时打开；正式运行建议关闭TX逐帧日志。
+  log_tx: false
+  log_rx: true
+
+# ---------- 3. 水管固定坐标标定 ----------
+calibration:
+  # 钢球中心能够到达的左端、原点、右端横坐标比例。
+  # 调试画面蓝/黄/蓝竖线应分别对准 -12.5、0、+12.5 cm。
+  left_x_ratio: 0.100
+  center_x_ratio: 0.495
+  right_x_ratio: 0.895
+  half_length_cm: 12.5
+  # 只接受该水管条带内的检测框。
+  detection_x_margin_ratio: 0.035
+  detection_y_min_ratio: 0.40
+  detection_y_max_ratio: 0.65
+
+# ---------- 4. 三种任务模式 ----------
+modes:
+  # 模式1：回到中心并连续保持。
+  mode1_target_cm: 0.0
+  mode1_tolerance_cm: 0.5
+  mode1_hold_sec: 1.0
+
+  # 模式2：依次到 0、+5、-5 cm。
+  # tolerance_cm 就是三个点共同的“到达判定阈值”：
+  # 例如0.5表示目标±0.5 cm以内才算进入目标范围。
+  mode2_targets_cm: [0.0, 5.0, -5.0]
+  mode2_tolerance_cm: 0.5
+  # 三个位置分别需要连续停留的时间。
+  mode2_hold_sec: [0.3, 0.5, 1.0]
+  # 整个模式2允许的最长时间。
+  mode2_timeout_sec: 5.0
+
+  # 模式3：下位机指定任意目标位置。
+  mode3_tolerance_cm: 0.5
+  mode3_hold_sec: 1.0
+
+# ---------- 5. YOLO / TensorRT ----------
+model:
+  path: models/best.engine
+  fallback_path: models/best.pt
+  # 只将完整水管条带送入模型；高、宽都必须是32的倍数。
+  imgsz: [192, 640]
+  crop_top_ratio: 0.25
+  crop_bottom_ratio: 0.75
+  # 固定水管ROI已排除绝大多数误检，适当降低阈值以保留高速拖影。
+  confidence: 0.10
+  iou: 0.50
+  max_detections: 3
+  device: 0
+  # 仅对桌面best.pt生效；TensorRT engine内部精度由engine决定。
+  half: true
+
+# ---------- 6. 跟踪与短时丢检预测 ----------
+tracking:
+  # Alpha-Beta 位置/速度滤波。较高alpha保证快速运动时响应及时。
+  alpha: 0.72
+  beta: 0.16
+  acceleration_alpha: 0.18
+  velocity_deadband_units_per_sec: 12.0
+  maximum_speed_units_per_sec: 1800.0
+  reacquire_gate_units: 80.0
+  maximum_prediction_sec: 0.12
+  measurement_timeout_sec: 0.15
+
+# ---------- 7. 调试画面与性能日志 ----------
+debug:
+  enabled: true
+  display_rate_hz: 30.0
+  performance_log_period_sec: 5.0

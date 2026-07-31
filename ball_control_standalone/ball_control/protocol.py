@@ -19,28 +19,25 @@ def signed_int8(value: int) -> int:
     return value - 256 if value >= 128 else value
 
 
+def signed_int16(high_byte: int, low_byte: int) -> int:
+    value = (high_byte << 8) | low_byte
+    return value - 65536 if value >= 32768 else value
+
+
 def decode_task_frame(frame: bytes) -> TaskCommand | None:
-    """Decode AA | integer/mode | decimal | FF."""
+    """Decode fixed command frames; mode 3 is signed int16 in 0.1 cm."""
     if len(frame) != 4 or frame[0] != 0xAA or frame[3] != 0xFF:
         return None
-    integer_byte, decimal_byte = frame[1], frame[2]
-    if integer_byte == 0x00 and decimal_byte == 0x00:
+    high_byte, low_byte = frame[1], frame[2]
+    if high_byte == 0x00 and low_byte == 0x00:
         return TaskCommand(mode=1, target_cm=0.0)
-    if integer_byte == 0x55 and decimal_byte == 0x00:
+    if high_byte == 0x55 and low_byte == 0x00:
         return TaskCommand(mode=2, target_cm=0.0)
 
-    integer_part = signed_int8(integer_byte)
-    if not -12 <= integer_part <= 12 or not 0 <= decimal_byte <= 9:
+    target_tenths = signed_int16(high_byte, low_byte)
+    if not -125 <= target_tenths <= 125:
         return None
-    decimal_part = decimal_byte / 10.0
-    target_cm = (
-        integer_part - decimal_part
-        if integer_part < 0
-        else integer_part + decimal_part
-    )
-    if not -12.5 <= target_cm <= 12.5:
-        return None
-    return TaskCommand(mode=3, target_cm=target_cm)
+    return TaskCommand(mode=3, target_cm=target_tenths / 10.0)
 
 
 class TaskFrameParser:

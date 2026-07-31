@@ -194,14 +194,15 @@ AA X_H X_L V A FF
 ```text
 AA 00 00 FF       模式1：找中心
 AA 55 00 FF       模式2：0 → +5 → -5
-AA 整数位 小数位 FF  模式3：任意位置
+AA TARGET_H TARGET_L FF  模式3：任意位置
 ```
 
-模式3整数位是 signed int8，小数位为 `0~9`，例如：
+模式3目标值是 signed int16 大端序，单位为 `0.1 cm`，例如：
 
 ```text
-AA 05 03 FF       +5.3 cm
-AA FB 03 FF       -5.3 cm
+AA 00 35 FF       +5.3 cm
+AA FF CB FF       -5.3 cm
+AA FF FB FF       -0.5 cm
 ```
 
 ### Jetson发送任务状态
@@ -213,6 +214,8 @@ AB MODE_STEP TARGET_H TARGET_L STATUS FF
 ```
 
 `STATUS`：`0`运行、`1`完成、`2`超时、`3`当前无有效球位置。
+
+该扩展帧默认关闭；当前只发送 `AA X_H X_L V A FF` 小球状态帧。
 
 ## 7. 安全策略
 

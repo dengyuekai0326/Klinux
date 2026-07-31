@@ -20,13 +20,18 @@ class ProtocolTests(unittest.TestCase):
             TaskCommand(2, 0.0),
         )
         self.assertEqual(
-            decode_task_frame(bytes.fromhex("AA 05 03 FF")),
+            decode_task_frame(bytes.fromhex("AA 00 35 FF")),
             TaskCommand(3, 5.3),
         )
         self.assertEqual(
-            decode_task_frame(bytes.fromhex("AA FB 03 FF")),
+            decode_task_frame(bytes.fromhex("AA FF CB FF")),
             TaskCommand(3, -5.3),
         )
+        self.assertEqual(
+            decode_task_frame(bytes.fromhex("AA FF FB FF")),
+            TaskCommand(3, -0.5),
+        )
+        self.assertIsNone(decode_task_frame(bytes.fromhex("AA 00 7E FF")))
 
     def test_parser_recovers_from_noise_and_fragmentation(self):
         parser = TaskFrameParser()
