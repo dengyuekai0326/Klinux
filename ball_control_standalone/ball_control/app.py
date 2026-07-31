@@ -93,6 +93,8 @@ def log_performance(
     serial_worker: SerialWorker,
     processed: int,
     dropped: int,
+    stale_dropped: int,
+    pipeline_latencies_ms: list[float],
     started_at: float,
 ) -> None:
     _, camera_fps, camera_failures = camera.stats()
@@ -102,15 +104,23 @@ def log_performance(
     elapsed = max(1e-6, time.monotonic() - started_at)
     processed_fps = processed / elapsed
     detection_rate = detections / frames * 100.0 if frames else 0.0
+    ordered_pipeline = sorted(pipeline_latencies_ms)
+    pipeline_p95_ms = (
+        ordered_pipeline[round((len(ordered_pipeline) - 1) * 0.95)]
+        if ordered_pipeline
+        else 0.0
+    )
     print(
         "PERF "
         f"camera={camera_fps:.1f}fps "
         f"inference_loop={processed_fps:.1f}fps "
         f"latency_mean={mean_ms:.1f}ms "
         f"latency_p95={p95_ms:.1f}ms "
+        f"pipeline_p95={pipeline_p95_ms:.1f}ms "
         f"detected={detection_rate:.1f}% "
         f"accepted/rejected/missed={accepted}/{rejected}/{missed} "
-        f"dropped={dropped} camera_failures={camera_failures} "
+        f"dropped={dropped} stale_dropped={stale_dropped} "
+        f"camera_failures={camera_failures} "
         f"tx={serial_stats.ball_frames} "
         f"tx_jitter_max={serial_stats.maximum_jitter_ms:.2f}ms"
     )
@@ -118,6 +128,7 @@ def log_performance(
 
 def run(config: AppConfig, model_path: Path) -> int:
     cv2.setNumThreads(1)
+    cv2.setUseOptimized(True)
     calibration = PipeCalibration(config.calibration)
     tracker = MotionTracker(config.tracking)
     modes = ModeController(config.modes, config.calibration.half_length_cm)
@@ -141,6 +152,8 @@ def run(config: AppConfig, model_path: Path) -> int:
     last_sequence = 0
     processed = 0
     dropped = 0
+    stale_dropped = 0
+    pipeline_latencies_ms: list[float] = []
     next_debug_at = started_at
     next_log_at = started_at + config.debug.performance_log_period_sec
 
@@ -151,6 +164,10 @@ def run(config: AppConfig, model_path: Path) -> int:
                 continue
             dropped += max(0, sample.sequence - last_sequence - 1)
             last_sequence = sample.sequence
+            frame_age = time.monotonic() - sample.timestamp
+            if frame_age > config.camera.maximum_frame_age_sec:
+                stale_dropped += 1
+                continue
             detection = detector.detect(sample.frame)
             if detection is None:
                 tracker.mark_missed()
@@ -162,6 +179,11 @@ def run(config: AppConfig, model_path: Path) -> int:
                     tracker.mark_missed()
             processed += 1
             now = time.monotonic()
+            pipeline_latencies_ms.append(
+                (now - sample.timestamp) * 1000.0
+            )
+            if len(pipeline_latencies_ms) > 600:
+                del pipeline_latencies_ms[:300]
             motion = tracker.snapshot(
                 now, config.serial.prediction_horizon_sec
             )
@@ -190,6 +212,8 @@ def run(config: AppConfig, model_path: Path) -> int:
                     serial_worker,
                     processed,
                     dropped,
+                    stale_dropped,
+                    pipeline_latencies_ms,
                     started_at,
                 )
                 next_log_at = now + config.debug.performance_log_period_sec

@@ -18,6 +18,7 @@ class CameraConfig:
     fourcc: str
     buffer_size: int
     reconnect_delay_sec: float
+    maximum_frame_age_sec: float
 
 
 @dataclass(frozen=True)
@@ -29,6 +30,7 @@ class ModelConfig:
     iou: float
     max_detections: int
     device: int
+    half: bool
 
 
 @dataclass(frozen=True)
@@ -156,6 +158,8 @@ def validate_config(config: AppConfig) -> None:
     camera = config.camera
     if camera.width <= 0 or camera.height <= 0 or camera.fps <= 0:
         raise ValueError("camera width, height and fps must be positive")
+    if camera.maximum_frame_age_sec <= 0:
+        raise ValueError("camera maximum_frame_age_sec must be positive")
     if len(camera.fourcc) != 4:
         raise ValueError("camera fourcc must contain four characters")
 

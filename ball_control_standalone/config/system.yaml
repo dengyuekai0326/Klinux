@@ -2,13 +2,15 @@
 camera:
   # 按名称自动寻找有效采集节点，避免重新插拔后video编号变化。
   device: "auto:MF500 camera"
-  width: 1280
-  height: 720
+  # YOLO的16:9有效输入就是640x360，直接采集该尺寸可省去二次缩放。
+  width: 640
+  height: 360
   fps: 30
   fourcc: MJPG
   # MF500在当前UVC驱动下设为1会隔帧，只能约8FPS；2可恢复设备满速。
   buffer_size: 2
   reconnect_delay_sec: 0.5
+  maximum_frame_age_sec: 0.08
 
 model:
   path: models/best.engine
@@ -18,6 +20,8 @@ model:
   iou: 0.50
   max_detections: 3
   device: 0
+  # 仅对桌面best.pt生效；TensorRT engine内部精度由engine决定。
+  half: true
 
 calibration:
   # 水管中钢球中心能够到达的左端、原点、右端横坐标比例。
@@ -26,10 +30,10 @@ calibration:
   center_x_ratio: 0.495
   right_x_ratio: 0.895
   half_length_cm: 12.5
-  # 排除水管以外的误检；训练集钢球中心Y范围约为0.536~0.621。
+  # 新固定结构中钢球中心约在Y=0.479；保留上下装配和振动余量。
   detection_x_margin_ratio: 0.035
-  detection_y_min_ratio: 0.48
-  detection_y_max_ratio: 0.68
+  detection_y_min_ratio: 0.40
+  detection_y_max_ratio: 0.65
 
 tracking:
   # Alpha-Beta 位置/速度滤波。较高alpha保证快速运动时响应及时。
@@ -70,5 +74,5 @@ modes:
 
 debug:
   enabled: true
-  display_rate_hz: 15.0
+  display_rate_hz: 30.0
   performance_log_period_sec: 5.0

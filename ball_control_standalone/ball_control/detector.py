@@ -8,6 +8,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import torch
 from ultralytics import YOLO
 
 from .calibration import PipeCalibration
@@ -41,6 +42,9 @@ class BallDetector:
         self.config = config
         self.calibration = calibration
         self.model_path = model_path
+        self.use_half = config.half and model_path.suffix.lower() == ".pt"
+        torch.backends.cudnn.benchmark = True
+        torch.set_float32_matmul_precision("high")
         self.model = YOLO(str(model_path), task="detect")
         self.latencies_ms: list[float] = []
         self.frames = 0
@@ -48,6 +52,7 @@ class BallDetector:
 
     def warmup(self, width: int, height: int, count: int = 10) -> None:
         print(f"Loading model: {self.model_path}")
+        print(f"PyTorch FP16: {'enabled' if self.use_half else 'not applicable'}")
         dummy = np.zeros((height, width, 3), dtype=np.uint8)
         for _ in range(count):
             self._predict(dummy)
@@ -101,6 +106,7 @@ class BallDetector:
             classes=[0],
             max_det=self.config.max_detections,
             device=self.config.device,
+            half=self.use_half,
             verbose=False,
         )[0]
 
