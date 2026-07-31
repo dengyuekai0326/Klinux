@@ -25,7 +25,9 @@ class CameraConfig:
 class ModelConfig:
     path: str
     fallback_path: str
-    imgsz: int
+    imgsz: tuple[int, int]
+    crop_top_ratio: float
+    crop_bottom_ratio: float
     confidence: float
     iou: float
     max_detections: int
@@ -120,6 +122,14 @@ def _triple(values: Any, name: str) -> tuple[float, float, float]:
     return tuple(float(value) for value in values)  # type: ignore[return-value]
 
 
+def _image_size(values: Any) -> tuple[int, int]:
+    if isinstance(values, int):
+        return values, values
+    if not isinstance(values, list) or len(values) != 2:
+        raise ValueError("model.imgsz must be an integer or [height, width]")
+    return int(values[0]), int(values[1])
+
+
 def load_config(path: Path) -> AppConfig:
     path = path.expanduser().resolve()
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -127,7 +137,9 @@ def load_config(path: Path) -> AppConfig:
         raise ValueError("configuration root must be a mapping")
 
     camera = CameraConfig(**_section(raw, "camera"))
-    model = ModelConfig(**_section(raw, "model"))
+    model_raw = _section(raw, "model").copy()
+    model_raw["imgsz"] = _image_size(model_raw["imgsz"])
+    model = ModelConfig(**model_raw)
     calibration = CalibrationConfig(**_section(raw, "calibration"))
     tracking = TrackingConfig(**_section(raw, "tracking"))
     serial = SerialConfig(**_section(raw, "serial"))
@@ -164,8 +176,13 @@ def validate_config(config: AppConfig) -> None:
         raise ValueError("camera fourcc must contain four characters")
 
     model = config.model
-    if model.imgsz <= 0 or not 0.0 < model.confidence <= 1.0:
+    if (
+        any(value <= 0 or value % 32 != 0 for value in model.imgsz)
+        or not 0.0 < model.confidence <= 1.0
+    ):
         raise ValueError("invalid model imgsz or confidence")
+    if not 0.0 <= model.crop_top_ratio < model.crop_bottom_ratio <= 1.0:
+        raise ValueError("invalid model crop ratios")
     if not 0.0 < model.iou <= 1.0 or model.max_detections <= 0:
         raise ValueError("invalid model iou or max_detections")
 

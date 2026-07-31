@@ -61,6 +61,13 @@ def main() -> None:
 
     engine = config.resolve(config.model.path)
     fallback = config.resolve(config.model.fallback_path)
+    height, width = config.model.imgsz
+    print(f"Model input:  {width}x{height}")
+    print(
+        "Model ROI:    "
+        f"y={config.model.crop_top_ratio:.2f}.."
+        f"{config.model.crop_bottom_ratio:.2f}"
+    )
     print(f"Engine:      {engine}")
     if not engine.is_file() and not args.allow_missing_engine:
         errors.append(f"TensorRT engine is missing: {engine}")

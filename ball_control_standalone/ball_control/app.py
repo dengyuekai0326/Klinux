@@ -197,6 +197,8 @@ def run(config: AppConfig, model_path: Path) -> int:
                     status_lines(
                         motion, detection, calibration, modes
                     ),
+                    config.model.crop_top_ratio,
+                    config.model.crop_bottom_ratio,
                 )
                 cv2.imshow(WINDOW_NAME, output)
                 key = cv2.waitKey(1) & 0xFF

@@ -15,17 +15,23 @@ Alpha-Beta位置/速度滤波 + 最长120ms短时预测
 推理偶尔慢于摄像头时，旧帧会直接丢弃，不会排队形成越来越大的控制延迟。
 串口发送与推理解耦，在有效测量后的短时间内使用运动状态预测维持30Hz。
 
+视觉只把完整水管所在的纵向 `25%～75%` 条带送进模型，TensorRT固定输入为
+`640×192`。相比原来的640×640，理论输入计算量减少70%；摄像头完整画面
+仍然保留用于调试显示，左右水管端点不会被裁掉。
+
 ## 1. 放入 TensorRT engine
 
 在 Jetson 上执行：
 
 ```bash
-cp ~/ball_yolo_jetson_stable/runs/ball_yolo11n_stable/weights/best.engine \
-   ~/ball_control_standalone/models/best.engine
+cd ~/ball_control_standalone
+source ~/venvs/yolo/bin/activate
+python3 tools/export_engine_jetson.py
 ```
 
-`models/best.pt` 只用于调试和应急回退。比赛运行必须优先使用
-`models/best.engine`。
+这会根据 `config/system.yaml` 重新生成 `models/best.engine`。之前生成的
+640×640 engine不能用于新的640×192裁剪配置。`models/best.pt` 只用于
+电脑调试和应急回退。
 
 ## 2. 集中配置
 
@@ -157,6 +163,13 @@ tx_jitter_max
 - `dropped` 可以缓慢增加，但不能持续快速增加
 
 丢弃旧帧是设计行为：控制系统需要最新状态，而不是处理完整历史帧。
+
+当前电脑使用 `best.pt + 640×192 ROI` 的连续实测结果：
+
+- 1035帧检测率100%
+- 视觉循环约20.6 FPS（裁剪前约15.7 FPS）
+- 完整链路P95约14.8 ms
+- 无过期帧，只有启动阶段丢弃1帧
 
 ## 6. 串口协议
 

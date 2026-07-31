@@ -15,8 +15,12 @@ camera:
 model:
   path: models/best.engine
   fallback_path: models/best.pt
-  imgsz: 640
-  confidence: 0.15
+  # 只将完整水管条带送入模型；高、宽都必须是32的倍数。
+  imgsz: [192, 640]
+  crop_top_ratio: 0.25
+  crop_bottom_ratio: 0.75
+  # 固定水管ROI已排除绝大多数误检，适当降低阈值以保留高速拖影。
+  confidence: 0.10
   iou: 0.50
   max_detections: 3
   device: 0

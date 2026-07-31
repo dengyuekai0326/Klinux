@@ -53,6 +53,12 @@ class BallDetector:
     def warmup(self, width: int, height: int, count: int = 10) -> None:
         print(f"Loading model: {self.model_path}")
         print(f"PyTorch FP16: {'enabled' if self.use_half else 'not applicable'}")
+        print(
+            "Model ROI: "
+            f"y={self.config.crop_top_ratio:.2f}.."
+            f"{self.config.crop_bottom_ratio:.2f}, "
+            f"input={self.config.imgsz[1]}x{self.config.imgsz[0]}"
+        )
         dummy = np.zeros((height, width, 3), dtype=np.uint8)
         for _ in range(count):
             self._predict(dummy)
@@ -63,7 +69,7 @@ class BallDetector:
 
     def detect(self, frame: np.ndarray) -> Detection | None:
         started = time.perf_counter()
-        result = self._predict(frame)
+        result, crop_top = self._predict(frame)
         self.latencies_ms.append((time.perf_counter() - started) * 1000.0)
         if len(self.latencies_ms) > 600:
             del self.latencies_ms[:300]
@@ -75,7 +81,14 @@ class BallDetector:
             xyxy = result.boxes.xyxy.detach().cpu().numpy()
             confidence = result.boxes.conf.detach().cpu().numpy()
             for box, score in zip(xyxy, confidence):
-                detection = Detection(*map(float, box), float(score))
+                x1, y1, x2, y2 = map(float, box)
+                detection = Detection(
+                    x1,
+                    y1 + crop_top,
+                    x2,
+                    y2 + crop_top,
+                    float(score),
+                )
                 if self.calibration.accepts_detection(
                     detection.center_x,
                     detection.center_y,
@@ -98,8 +111,12 @@ class BallDetector:
         return self.frames, self.detections, mean, median, p95
 
     def _predict(self, frame: np.ndarray):
-        return self.model.predict(
-            source=frame,
+        height = frame.shape[0]
+        crop_top = round(height * self.config.crop_top_ratio)
+        crop_bottom = round(height * self.config.crop_bottom_ratio)
+        inference_frame = frame[crop_top:crop_bottom]
+        result = self.model.predict(
+            source=inference_frame,
             imgsz=self.config.imgsz,
             conf=self.config.confidence,
             iou=self.config.iou,
@@ -109,6 +126,7 @@ class BallDetector:
             half=self.use_half,
             verbose=False,
         )[0]
+        return result, crop_top
 
 
 def draw_debug(
@@ -117,6 +135,8 @@ def draw_debug(
     calibration: PipeCalibration,
     tracked_x: float | None,
     status_lines: list[str],
+    crop_top_ratio: float,
+    crop_bottom_ratio: float,
 ) -> np.ndarray:
     output = frame.copy()
     height, width = output.shape[:2]
@@ -124,6 +144,16 @@ def draw_debug(
     cv2.line(output, (left, 0), (left, height - 1), (255, 0, 0), 2)
     cv2.line(output, (center, 0), (center, height - 1), (0, 255, 255), 2)
     cv2.line(output, (right, 0), (right, height - 1), (255, 0, 0), 2)
+    crop_top = round(crop_top_ratio * height)
+    crop_bottom = round(crop_bottom_ratio * height)
+    cv2.line(output, (0, crop_top), (width - 1, crop_top), (255, 0, 255), 1)
+    cv2.line(
+        output,
+        (0, crop_bottom),
+        (width - 1, crop_bottom),
+        (255, 0, 255),
+        1,
+    )
     if detection is not None:
         p1 = (round(detection.x1), round(detection.y1))
         p2 = (round(detection.x2), round(detection.y2))

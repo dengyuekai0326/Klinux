@@ -4,21 +4,28 @@
 from __future__ import annotations
 
 import argparse
-import statistics
-import time
+import sys
 from pathlib import Path
 
 import cv2
-import torch
-from ultralytics import YOLO
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from ball_control.calibration import PipeCalibration  # noqa: E402
+from ball_control.config import load_config  # noqa: E402
+from ball_control.detector import BallDetector  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("model", type=Path)
     parser.add_argument("images", type=Path)
-    parser.add_argument("--imgsz", type=int, default=640)
-    parser.add_argument("--conf", type=float, default=0.15)
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=ROOT / "config" / "system.yaml",
+    )
     parser.add_argument("--warmup", type=int, default=20)
     return parser.parse_args()
 
@@ -31,38 +38,29 @@ def main() -> None:
         raise SystemExit(f"failed to load test images from {args.images}")
     print(f"Preloaded {len(frames)} decoded frames into memory")
 
-    model = YOLO(str(args.model.expanduser().resolve()), task="detect")
-    options = dict(
-        imgsz=args.imgsz,
-        conf=args.conf,
-        classes=[0],
-        max_det=3,
-        device=0,
-        verbose=False,
+    config = load_config(args.config)
+    detector = BallDetector(
+        config.model,
+        PipeCalibration(config.calibration),
+        args.model.expanduser().resolve(),
     )
-    for index in range(args.warmup):
-        model.predict(frames[index % len(frames)], **options)
-    torch.cuda.synchronize()
-
-    latencies: list[float] = []
-    detections = 0
+    detector.warmup(
+        width=frames[0].shape[1],
+        height=frames[0].shape[0],
+        count=args.warmup,
+    )
     for frame in frames:
-        started = time.perf_counter()
-        result = model.predict(frame, **options)[0]
-        torch.cuda.synchronize()
-        latencies.append((time.perf_counter() - started) * 1000.0)
-        detections += len(result.boxes)
+        detector.detect(frame)
 
-    ordered = sorted(latencies)
-    mean = statistics.mean(ordered)
-    median = statistics.median(ordered)
-    p95 = ordered[round((len(ordered) - 1) * 0.95)]
+    frame_count, detections, mean, median, p95 = detector.stats()
     print(f"Images:       {len(frames)}")
     print(f"Detections:   {detections}")
     print(f"Mean latency: {mean:.2f} ms ({1000.0 / mean:.1f} FPS)")
     print(f"Median:       {median:.2f} ms")
     print(f"P95 latency:  {p95:.2f} ms")
     print(f"30 FPS P95:   {'PASS' if p95 <= 33.33 else 'FAIL'}")
+    if frame_count != len(frames):
+        raise SystemExit("internal benchmark frame count mismatch")
 
 
 if __name__ == "__main__":
