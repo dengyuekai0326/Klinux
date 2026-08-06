@@ -1,0 +1,116 @@
+# =====================================================================
+# 钢球视觉控制 v2：唯一现场参数文件
+# =====================================================================
+# 修改方法：
+#   1. 优先只改带【现场必调】的参数。
+#   2. 带【性能固定】的参数已经按 30 FPS / 低延迟配置，比赛前不要随意改。
+#   3. 带【高级调参】的参数一次只改一个，并记录修改前后的 PERF 数据。
+#   4. 保存后必须重启程序才会生效；比例均为 0.0～1.0。
+# =====================================================================
+
+# ---------- A. 摄像头（现场最常修改） ----------
+camera:
+  # 【现场必调】推荐按设备名称自动寻找，避免重插后 /dev/videoN 改变。
+  # 自动寻找失败时可直接写：device: /dev/video2
+  device: "auto:MF500 camera"
+
+  # 【性能固定】完整画面仍覆盖整根水管；模型只处理下方定义的纵向ROI。
+  width: 640
+  height: 360
+  fps: 30
+  fourcc: MJPG
+
+  # 【性能固定】MF500在当前UVC驱动上设为1会隔帧，实测2才能保持满速。
+  # 本程序无论该值多少都只处理最新帧，不会把旧帧排成长队。
+  buffer_size: 2
+  reconnect_delay_sec: 0.5
+
+  # 【高级调参】超过80ms的旧采集帧不再推理；Jetson卡顿时宁可丢旧帧。
+  maximum_frame_age_sec: 0.08
+
+# ---------- B. 串口（现场必调） ----------
+serial:
+  enabled: true
+  # 【现场必调】下位机端口。
+  port: /dev/ttyACM0
+  baudrate: 115200
+  timeout_sec: 0.01
+
+  # 【性能固定】状态帧固定30Hz，与GUI/NoMachine刷新速度完全解耦。
+  tx_rate_hz: 30.0
+  prediction_horizon_sec: 0.08
+  send_ball_state: true
+
+  # 正式运行不要打开逐帧TX日志；RX只在收到录像控制命令时产生少量输出。
+  log_tx: false
+  log_rx: true
+
+# ---------- C. 固定机械结构坐标标定（装配后必调一次） ----------
+calibration:
+  # 【现场必调】调试画面蓝/黄/蓝线分别对准钢球中心可达的
+  # -12.5 cm、0 cm、+12.5 cm；不是对准塑料水管外边缘。
+  left_x_ratio: 0.100
+  center_x_ratio: 0.495
+  right_x_ratio: 0.895
+  half_length_cm: 12.5
+
+  # 【高级调参】仅接受固定水管区域内的YOLO框。
+  detection_x_margin_ratio: 0.035
+  detection_y_min_ratio: 0.40
+  detection_y_max_ratio: 0.65
+
+# ---------- D. YOLO / TensorRT（模型与低延迟参数） ----------
+model:
+  # Jetson正式运行优先加载本机导出的engine；电脑自动回退到best.pt。
+  path: models/best.engine
+  fallback_path: models/best.pt
+
+  # 【性能固定】只将水管纵向条带缩放到640x192送入模型。
+  # 修改imgsz后必须在Jetson重新导出best.engine。
+  imgsz: [192, 640]
+  crop_top_ratio: 0.25
+  crop_bottom_ratio: 0.75
+
+  # 【高级调参】高速拖影漏检时可逐步降到0.08；误检增多时升到0.15。
+  confidence: 0.10
+  iou: 0.50
+  max_detections: 3
+  device: 0
+  # 仅best.pt生效；TensorRT精度由engine在导出时决定。
+  half: true
+
+# ---------- E. 跟踪与短时丢检预测（通常不改） ----------
+tracking:
+  # alpha越大越跟手、越小越平滑；beta影响速度跟随。
+  alpha: 0.72
+  beta: 0.16
+  acceleration_alpha: 0.18
+  velocity_deadband_units_per_sec: 12.0
+  maximum_speed_units_per_sec: 1800.0
+  reacquire_gate_units: 80.0
+
+  # 最多预测120ms；测量超过150ms就停止发送，避免输出虚假位置。
+  maximum_prediction_sec: 0.12
+  measurement_timeout_sec: 0.15
+
+# ---------- F. 串口控制录像 ----------
+recording:
+  # 程序启动不自动录像，只响应 AA BB BB FF / AA CC CC FF。
+  enabled: true
+  output_dir: recordings
+  filename_prefix: ball
+  fourcc: MJPG
+  fps: 30.0
+
+  # 写盘慢时最多缓存8帧；满后丢最旧录像帧，绝不阻塞识别/串口。
+  queue_size: 8
+
+# ---------- G. 调试画面与性能日志 ----------
+debug:
+  # 【比赛要求】保持true。显示线程已与识别/串口解耦。
+  enabled: true
+  display_rate_hz: 30.0
+
+  # NoMachine/GUI来不及时跳过超过120ms的旧调试快照，只显示最新结果。
+  maximum_display_age_sec: 0.12
+  performance_log_period_sec: 5.0
