@@ -1,4 +1,0 @@
-# JetPack提供的CUDA、TensorRT、PyTorch和OpenCV不要在这里覆盖。
-PyYAML>=6.0,<7
-pyserial>=3.5,<4
-ultralytics==8.4.60
